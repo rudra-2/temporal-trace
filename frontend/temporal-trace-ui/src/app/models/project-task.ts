@@ -7,3 +7,11 @@ export interface ProjectTask {
   updatedAt: string;
   completedAt: string | null;
 }
+
+export interface TimelineWindow {
+  minTime: string;
+  maxTime: string;
+  yesterdayStartUtc: string;
+  yesterdayEndUtc: string;
+  usedFallbackWindow: boolean;
+}
