@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddHealthChecks();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendDev", policy =>
@@ -40,5 +41,6 @@ app.UseCors("FrontendDev");
 
 app.MapControllers();
 app.MapHub<TemporalHub>("/hubs/temporal");
+app.MapHealthChecks("/healthz");
 
 app.Run();
