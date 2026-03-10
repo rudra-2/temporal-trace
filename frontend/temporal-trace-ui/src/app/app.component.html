@@ -25,6 +25,32 @@
       <p class="selected-time">Selected: {{ asTimelineLabel(selectedMs) }}</p>
     </section>
 
+    @if (mode === 'history' && selectedDiffTaskId !== null) {
+      <section class="branch-selector">
+        <label for="branch-select">Timeline:</label>
+        <select id="branch-select" (change)="onBranchSelectionChange($event)" [value]="selectedBranchId || ''">
+          <option value="">Main Timeline</option>
+          @for (branch of branches; track branch.branchId) {
+            <option [value]="branch.branchId">
+              {{ branch.branchName }} ({{ branchCreatedAtLabel(branch.createdFromTime) }})
+            </option>
+          }
+        </select>
+        <button class="create-branch-btn" (click)="openCreateBranchDialog()" [disabled]="isBranchLoading">+ Create Branch</button>
+      </section>
+    }
+
+    @if (showCreateBranchDialog && mode === 'history') {
+      <section class="create-branch-dialog">
+        <label for="branch-name">Branch Name:</label>
+        <input id="branch-name" type="text" [(ngModel)]="newBranchName" placeholder="e.g., If we prioritized bugs" />
+        <div class="dialog-actions">
+          <button (click)="createBranch()" [disabled]="!newBranchName.trim() || isBranchLoading">Create</button>
+          <button (click)="showCreateBranchDialog = false">Cancel</button>
+        </div>
+      </section>
+    }
+
     @if (isLoading) {
       <p class="status">Loading timeline snapshot...</p>
     }
@@ -59,38 +85,49 @@
       </section>
 
       <aside class="ghost-panel">
-        <h3>Ghost of Changes Past</h3>
-        @if (mode !== 'history') {
-          <p class="status">Switch to History mode and hover a task to view a diagnostic diff.</p>
+        @if (!selectedBranchId) {
+          <h3>Ghost of Changes Past</h3>
+          @if (mode !== 'history') {
+            <p class="status">Switch to History mode and hover a task to view a diagnostic diff.</p>
+          }
+
+          @if (mode === 'history' && isComparisonLoading) {
+            <p class="status">Loading comparison...</p>
+          }
+
+          @if (mode === 'history' && selectedComparison) {
+            <div class="diff-grid">
+              <article>
+                <h4>Historical</h4>
+                <p [class.changed]="isChanged('status')">Status: {{ selectedComparison.historical.status }}</p>
+                <p [class.changed]="isChanged('priority')">Priority: {{ selectedComparison.historical.priority }}</p>
+                <div class="diff-description" [class.changed]="isChanged('description')">
+                  @for (token of descriptionHistoricalTokens; track token.text + $index) {
+                    <span [class.changed-token]="token.kind === 'changed'">{{ token.text }} </span>
+                  }
+                </div>
+              </article>
+              <article>
+                <h4>Current</h4>
+                <p [class.changed]="isChanged('status')">Status: {{ selectedComparison.current.status }}</p>
+                <p [class.changed]="isChanged('priority')">Priority: {{ selectedComparison.current.priority }}</p>
+                <div class="diff-description" [class.changed]="isChanged('description')">
+                  @for (token of descriptionCurrentTokens; track token.text + $index) {
+                    <span [class.changed-token]="token.kind === 'changed'">{{ token.text }} </span>
+                  }
+                </div>
+              </article>
+            </div>
+          }
         }
 
-        @if (mode === 'history' && isComparisonLoading) {
-          <p class="status">Loading comparison...</p>
-        }
-
-        @if (mode === 'history' && selectedComparison) {
-          <div class="diff-grid">
-            <article>
-              <h4>Historical</h4>
-              <p [class.changed]="isChanged('status')">Status: {{ selectedComparison.historical.status }}</p>
-              <p [class.changed]="isChanged('priority')">Priority: {{ selectedComparison.historical.priority }}</p>
-              <div class="diff-description" [class.changed]="isChanged('description')">
-                @for (token of descriptionHistoricalTokens; track token.text + $index) {
-                  <span [class.changed-token]="token.kind === 'changed'">{{ token.text }} </span>
-                }
-              </div>
-            </article>
-            <article>
-              <h4>Current</h4>
-              <p [class.changed]="isChanged('status')">Status: {{ selectedComparison.current.status }}</p>
-              <p [class.changed]="isChanged('priority')">Priority: {{ selectedComparison.current.priority }}</p>
-              <div class="diff-description" [class.changed]="isChanged('description')">
-                @for (token of descriptionCurrentTokens; track token.text + $index) {
-                  <span [class.changed-token]="token.kind === 'changed'">{{ token.text }} </span>
-                }
-              </div>
-            </article>
+        @if (selectedBranchId) {
+          <h3>Branch: {{ selectedBranchName() }}</h3>
+          <div class="branch-info">
+            <p>Created from: {{ selectedBranchCreatedAt() }}</p>
+            <button class="delete-branch-btn" (click)="deleteSelectedBranch()">Delete Branch</button>
           </div>
+          <p class="status">Branch selected. Branch mutation actions are the next increment.</p>
         }
       </aside>
     </section>
