@@ -1,1 +1,19 @@
-/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+:root {
+	color-scheme: light;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: 'Space Grotesk', sans-serif;
+	background:
+		radial-gradient(circle at 10% 12%, rgba(231, 255, 237, 0.85), transparent 38%),
+		radial-gradient(circle at 95% 4%, rgba(214, 244, 255, 0.92), transparent 40%),
+		linear-gradient(145deg, #fff9f0, #e8f8ff 42%, #ecfbf3);
+	color: #143438;
+}

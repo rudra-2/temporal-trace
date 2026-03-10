@@ -67,6 +67,41 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
         return taskAtTime is null ? NotFound() : Ok(ToResponse(taskAtTime));
     }
 
+    [HttpGet("at")]
+    public async Task<ActionResult<IEnumerable<ProjectTaskResponse>>> GetTasksAtTime([FromQuery] DateTime targetTime)
+    {
+        if (targetTime == default)
+        {
+            return BadRequest("targetTime query parameter is required.");
+        }
+
+        if (targetTime.Kind == DateTimeKind.Unspecified)
+        {
+            return BadRequest("targetTime must include timezone information. Use UTC (e.g., 2026-03-10T18:00:00Z).");
+        }
+
+        var asOfUtc = targetTime.Kind switch
+        {
+            DateTimeKind.Utc => targetTime,
+            DateTimeKind.Local => targetTime.ToUniversalTime(),
+            _ => targetTime
+        };
+
+        if (asOfUtc > DateTime.UtcNow)
+        {
+            return BadRequest("targetTime cannot be in the future.");
+        }
+
+        var tasksAtTime = await dbContext.ProjectTasks
+            .TemporalAsOf(asOfUtc)
+            .AsNoTracking()
+            .OrderBy(t => t.Id)
+            .Select(t => ToResponse(t))
+            .ToListAsync();
+
+        return Ok(tasksAtTime);
+    }
+
     [HttpPost]
     public async Task<ActionResult<ProjectTaskResponse>> CreateTask([FromBody] ProjectTaskUpsertRequest request)
     {
