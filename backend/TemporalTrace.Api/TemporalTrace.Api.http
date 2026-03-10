@@ -1,0 +1,6 @@
+@TemporalTrace.Api_HostAddress = http://localhost:5294
+
+GET {{TemporalTrace.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

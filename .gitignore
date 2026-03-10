@@ -52,3 +52,47 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Node / Angular
+**/node_modules/
+**/.angular/
+**/.angular/cache/
+**/dist/
+**/tmp/
+**/out-tsc/
+**/coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend environment files (keep examples if needed)
+frontend/temporal-trace-ui/src/environments/*.local.ts
+frontend/temporal-trace-ui/src/environments/environment*.ts
+!frontend/temporal-trace-ui/src/environments/environment.ts
+
+# .NET user/secrets and tooling
+**/*.user
+**/*.suo
+**/*.userosscache
+**/*.sln.docstates
+**/Properties/launchSettings.json
+**/.vs/
+
+# EF / local databases
+*.db
+*.db-shm
+*.db-wal
+*.mdf
+*.ldf
+
+# Local env files and secrets
+.env
+.env.*
+!.env.example
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+**/.idea/
+**/.history/
