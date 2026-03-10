@@ -67,6 +67,66 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
         return taskAtTime is null ? NotFound() : Ok(ToResponse(taskAtTime));
     }
 
+    [HttpGet("{id:int}/compare")]
+    public async Task<ActionResult<ProjectTaskComparisonResponse>> CompareTaskAtTime(int id, [FromQuery] DateTime targetTime)
+    {
+        if (targetTime == default)
+        {
+            return BadRequest("targetTime query parameter is required.");
+        }
+
+        if (targetTime.Kind == DateTimeKind.Unspecified)
+        {
+            return BadRequest("targetTime must include timezone information. Use UTC (e.g., 2026-03-10T18:00:00Z).");
+        }
+
+        var asOfUtc = targetTime.Kind switch
+        {
+            DateTimeKind.Utc => targetTime,
+            DateTimeKind.Local => targetTime.ToUniversalTime(),
+            _ => targetTime
+        };
+
+        if (asOfUtc > DateTime.UtcNow)
+        {
+            return BadRequest("targetTime cannot be in the future.");
+        }
+
+        var historical = await dbContext.ProjectTasks
+            .TemporalAsOf(asOfUtc)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (historical is null)
+        {
+            return NotFound();
+        }
+
+        var current = await dbContext.ProjectTasks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (current is null)
+        {
+            return NotFound();
+        }
+
+        var changedFields = new List<string>();
+        if (!string.Equals(historical.Title, current.Title, StringComparison.Ordinal)) changedFields.Add("title");
+        if (!string.Equals(historical.Description, current.Description, StringComparison.Ordinal)) changedFields.Add("description");
+        if (!string.Equals(historical.Status, current.Status, StringComparison.Ordinal)) changedFields.Add("status");
+        if (historical.Priority != current.Priority) changedFields.Add("priority");
+
+        var response = new ProjectTaskComparisonResponse
+        {
+            Historical = ToResponse(historical),
+            Current = ToResponse(current),
+            ChangedFields = changedFields
+        };
+
+        return Ok(response);
+    }
+
     [HttpGet("at")]
     public async Task<ActionResult<IEnumerable<ProjectTaskResponse>>> GetTasksAtTime([FromQuery] DateTime targetTime)
     {

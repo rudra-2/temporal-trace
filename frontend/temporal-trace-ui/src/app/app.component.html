@@ -41,20 +41,58 @@
       <p class="status">{{ pendingLiveEvents }} live update(s) arrived while browsing history. Move slider to now to sync live state.</p>
     }
 
-    <section class="grid">
-      @for (task of tasks; track task.id) {
-        <article class="task-card">
-          <div class="task-top">
-            <h2>{{ task.title }}</h2>
-            <span class="priority">P{{ task.priority }}</span>
+    <section class="workspace">
+      <section class="grid">
+        @for (task of tasks; track task.id) {
+          <article class="task-card" (mouseenter)="onTaskHover(task)">
+            <div class="task-top">
+              <h2>{{ task.title }}</h2>
+              <span class="priority">P{{ task.priority }}</span>
+            </div>
+            <p class="description">{{ task.description || 'No description' }}</p>
+            <footer>
+              <span class="status-pill">{{ task.status }}</span>
+              <small>#{{ task.id }}</small>
+            </footer>
+          </article>
+        }
+      </section>
+
+      <aside class="ghost-panel">
+        <h3>Ghost of Changes Past</h3>
+        @if (mode !== 'history') {
+          <p class="status">Switch to History mode and hover a task to view a diagnostic diff.</p>
+        }
+
+        @if (mode === 'history' && isComparisonLoading) {
+          <p class="status">Loading comparison...</p>
+        }
+
+        @if (mode === 'history' && selectedComparison) {
+          <div class="diff-grid">
+            <article>
+              <h4>Historical</h4>
+              <p [class.changed]="isChanged('status')">Status: {{ selectedComparison.historical.status }}</p>
+              <p [class.changed]="isChanged('priority')">Priority: {{ selectedComparison.historical.priority }}</p>
+              <div class="diff-description" [class.changed]="isChanged('description')">
+                @for (token of descriptionHistoricalTokens; track token.text + $index) {
+                  <span [class.changed-token]="token.kind === 'changed'">{{ token.text }} </span>
+                }
+              </div>
+            </article>
+            <article>
+              <h4>Current</h4>
+              <p [class.changed]="isChanged('status')">Status: {{ selectedComparison.current.status }}</p>
+              <p [class.changed]="isChanged('priority')">Priority: {{ selectedComparison.current.priority }}</p>
+              <div class="diff-description" [class.changed]="isChanged('description')">
+                @for (token of descriptionCurrentTokens; track token.text + $index) {
+                  <span [class.changed-token]="token.kind === 'changed'">{{ token.text }} </span>
+                }
+              </div>
+            </article>
           </div>
-          <p class="description">{{ task.description || 'No description' }}</p>
-          <footer>
-            <span class="status-pill">{{ task.status }}</span>
-            <small>#{{ task.id }}</small>
-          </footer>
-        </article>
-      }
+        }
+      </aside>
     </section>
   </section>
 </main>
