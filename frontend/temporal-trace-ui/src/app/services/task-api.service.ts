@@ -8,7 +8,7 @@ import { ProjectTask } from '../models/project-task';
 })
 export class TaskApiService {
   private readonly http = inject(HttpClient);
-  private readonly apiBase = 'http://localhost:5294/api/task';
+  private readonly apiBase = '/api/task';
 
   getCurrentTasks(): Observable<ProjectTask[]> {
     return this.http.get<ProjectTask[]>(this.apiBase);
