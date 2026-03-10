@@ -1,14 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using TemporalTrace.Api.Contracts;
 using TemporalTrace.Api.Data;
+using TemporalTrace.Api.Hubs;
 using TemporalTrace.Api.Models;
 
 namespace TemporalTrace.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class TaskController(AppDbContext dbContext) : ControllerBase
+public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hubContext) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProjectTaskResponse>>> GetTasks()
@@ -80,6 +82,7 @@ public class TaskController(AppDbContext dbContext) : ControllerBase
         await dbContext.SaveChangesAsync();
 
         var response = ToResponse(task);
+        await hubContext.Clients.All.SendAsync("taskUpdated", response);
         return CreatedAtAction(nameof(GetTask), new { id = task.Id }, response);
     }
 
@@ -98,7 +101,9 @@ public class TaskController(AppDbContext dbContext) : ControllerBase
         existing.Priority = request.Priority;
 
         await dbContext.SaveChangesAsync();
-        return Ok(ToResponse(existing));
+        var response = ToResponse(existing);
+        await hubContext.Clients.All.SendAsync("taskUpdated", response);
+        return Ok(response);
     }
 
     [HttpDelete("{id:int}")]
@@ -110,8 +115,11 @@ public class TaskController(AppDbContext dbContext) : ControllerBase
             return NotFound();
         }
 
+        var deletedSnapshot = ToResponse(existing);
         dbContext.ProjectTasks.Remove(existing);
         await dbContext.SaveChangesAsync();
+
+        await hubContext.Clients.All.SendAsync("taskDeleted", deletedSnapshot);
 
         return NoContent();
     }

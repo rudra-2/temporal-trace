@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using TemporalTrace.Api.Data;
+using TemporalTrace.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -20,5 +22,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapControllers();
+app.MapHub<TemporalHub>("/hubs/temporal");
 
 app.Run();
