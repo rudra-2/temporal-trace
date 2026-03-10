@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ProjectTask } from '../models/project-task';
 import { TaskComparison } from '../models/task-comparison';
-import { TaskBranch, BranchTimeline, CreateBranchRequest } from '../models/task-branch';
+import { TaskBranch, BranchTimeline, CreateBranchRequest, UpdateBranchOverrideRequest } from '../models/task-branch';
 
 @Injectable({
   providedIn: 'root'
@@ -38,6 +38,10 @@ export class TaskApiService {
   getBranchTimeline(branchId: string, targetTimeIso: string): Observable<BranchTimeline> {
     const params = new HttpParams().set('targetTime', targetTimeIso);
     return this.http.get<BranchTimeline>(`${this.apiBase}/branch/${branchId}/timeline`, { params });
+  }
+
+  updateBranchOverride(branchId: string, request: UpdateBranchOverrideRequest): Observable<TaskBranch> {
+    return this.http.put<TaskBranch>(`${this.apiBase}/branch/${branchId}/override`, request);
   }
 
   deleteBranch(branchId: string): Observable<void> {

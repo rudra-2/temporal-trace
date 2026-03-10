@@ -5,7 +5,7 @@ import { Subject, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { ProjectTask } from './models/project-task';
 import { DiffToken, TaskComparison } from './models/task-comparison';
-import { CreateBranchRequest, TaskBranch } from './models/task-branch';
+import { BranchTimeline, CreateBranchRequest, TaskBranch, UpdateBranchOverrideRequest } from './models/task-branch';
 import { TaskApiService } from './services/task-api.service';
 import { TemporalHubService } from './services/temporal-hub.service';
 
@@ -45,6 +45,12 @@ export class AppComponent implements OnInit, OnDestroy {
   isBranchLoading = false;
   showCreateBranchDialog = false;
   newBranchName = '';
+  selectedBranchTimeline: BranchTimeline | null = null;
+  isBranchTimelineLoading = false;
+  branchDraftTitle = '';
+  branchDraftDescription = '';
+  branchDraftStatus = '';
+  branchDraftPriority: number | null = null;
 
   ngOnInit(): void {
     this.loadCurrentTasks();
@@ -82,6 +88,9 @@ export class AppComponent implements OnInit, OnDestroy {
       .subscribe((tasks) => {
         this.tasks = tasks;
         this.isLoading = false;
+        if (this.mode === 'history' && this.selectedBranchId) {
+          this.loadSelectedBranchTimeline();
+        }
       });
   }
 
@@ -101,6 +110,10 @@ export class AppComponent implements OnInit, OnDestroy {
     const value = (event.target as HTMLSelectElement).value;
     this.selectedBranchId = value || null;
     this.clearComparison();
+    this.selectedBranchTimeline = null;
+    if (this.selectedBranchId) {
+      this.loadSelectedBranchTimeline();
+    }
   }
 
   onTaskHover(task: ProjectTask): void {
@@ -140,6 +153,9 @@ export class AppComponent implements OnInit, OnDestroy {
           comparison.current.description,
           'current'
         );
+        if (this.selectedBranchId) {
+          this.loadSelectedBranchTimeline();
+        }
       });
   }
 
@@ -183,7 +199,49 @@ export class AppComponent implements OnInit, OnDestroy {
           a.createdAt.localeCompare(b.createdAt)
         );
         this.selectedBranchId = branch.branchId;
+        this.loadSelectedBranchTimeline();
       });
+  }
+
+  saveBranchOverrides(): void {
+    if (!this.selectedBranchId) {
+      return;
+    }
+
+    const request: UpdateBranchOverrideRequest = {
+      overrideTitle: this.branchDraftTitle.trim() ? this.branchDraftTitle.trim() : null,
+      overrideDescription: this.branchDraftDescription.trim() ? this.branchDraftDescription.trim() : null,
+      overrideStatus: this.branchDraftStatus.trim() ? this.branchDraftStatus.trim() : null,
+      overridePriority: this.branchDraftPriority
+    };
+
+    this.isBranchLoading = true;
+    this.taskApi
+      .updateBranchOverride(this.selectedBranchId, request)
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Failed to save branch overrides.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((updated) => {
+        this.isBranchLoading = false;
+        if (!updated) {
+          return;
+        }
+
+        this.branches = this.branches.map((b) => (b.branchId === updated.branchId ? updated : b));
+        this.loadSelectedBranchTimeline();
+      });
+  }
+
+  resetBranchOverrides(): void {
+    this.branchDraftTitle = '';
+    this.branchDraftDescription = '';
+    this.branchDraftStatus = '';
+    this.branchDraftPriority = null;
+    this.saveBranchOverrides();
   }
 
   deleteSelectedBranch(): void {
@@ -236,6 +294,10 @@ export class AppComponent implements OnInit, OnDestroy {
     return this.asTimelineLabel(new Date(createdFromTime).getTime());
   }
 
+  branchFieldChanged(field: string): boolean {
+    return this.selectedBranchTimeline?.changedFields.includes(field) ?? false;
+  }
+
   private loadCurrentTasks(): void {
     this.isLoading = true;
     this.taskApi
@@ -273,8 +335,39 @@ export class AppComponent implements OnInit, OnDestroy {
         this.branches = branches;
         if (this.selectedBranchId && !branches.some((b) => b.branchId === this.selectedBranchId)) {
           this.selectedBranchId = null;
+          this.selectedBranchTimeline = null;
         }
         this.isBranchLoading = false;
+      });
+  }
+
+  private loadSelectedBranchTimeline(): void {
+    if (!this.selectedBranchId) {
+      return;
+    }
+
+    this.isBranchTimelineLoading = true;
+    this.taskApi
+      .getBranchTimeline(this.selectedBranchId, new Date(this.selectedMs).toISOString())
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to load selected branch timeline.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((timeline) => {
+        this.isBranchTimelineLoading = false;
+        if (!timeline) {
+          this.selectedBranchTimeline = null;
+          return;
+        }
+
+        this.selectedBranchTimeline = timeline;
+        this.branchDraftTitle = timeline.branchTaskSnapshot?.title ?? '';
+        this.branchDraftDescription = timeline.branchTaskSnapshot?.description ?? '';
+        this.branchDraftStatus = timeline.branchTaskSnapshot?.status ?? '';
+        this.branchDraftPriority = timeline.branchTaskSnapshot?.priority ?? null;
       });
   }
 
@@ -319,6 +412,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.branches = [];
     this.branchTaskId = null;
     this.selectedBranchId = null;
+    this.selectedBranchTimeline = null;
     this.showCreateBranchDialog = false;
   }
 

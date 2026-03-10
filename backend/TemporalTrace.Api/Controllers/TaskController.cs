@@ -247,7 +247,8 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
             BranchName = branch.BranchName,
             CreatedFromTime = branch.CreatedFromTime,
             CreatedAt = branch.CreatedAt,
-            IsMainTimeline = branch.IsMainTimeline
+            IsMainTimeline = branch.IsMainTimeline,
+            HasOverrides = false
         };
 
         return CreatedAtAction(nameof(GetBranch), new { taskId = id, branchId = branch.Id }, response);
@@ -273,7 +274,8 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
                 BranchName = b.BranchName,
                 CreatedFromTime = b.CreatedFromTime,
                 CreatedAt = b.CreatedAt,
-                IsMainTimeline = b.IsMainTimeline
+                IsMainTimeline = b.IsMainTimeline,
+                HasOverrides = b.OverrideTitle != null || b.OverrideDescription != null || b.OverrideStatus != null || b.OverridePriority != null
             })
             .ToListAsync();
 
@@ -299,7 +301,8 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
             BranchName = branch.BranchName,
             CreatedFromTime = branch.CreatedFromTime,
             CreatedAt = branch.CreatedAt,
-            IsMainTimeline = branch.IsMainTimeline
+            IsMainTimeline = branch.IsMainTimeline,
+            HasOverrides = branch.OverrideTitle != null || branch.OverrideDescription != null || branch.OverrideStatus != null || branch.OverridePriority != null
         };
 
         return Ok(response);
@@ -339,21 +342,87 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
             return BadRequest("targetTime cannot be in the future.");
         }
 
-        // Always return main task snapshot from temporal query
+        // Return base task snapshot from temporal query and overlay branch overrides.
         var mainTask = await dbContext.ProjectTasks
             .TemporalAsOf(asOfUtc)
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == branch.TaskId);
+
+        if (mainTask is null)
+        {
+            return NotFound("Task snapshot not found for selected timestamp.");
+        }
+
+        var branchTaskSnapshot = new ProjectTaskResponse
+        {
+            Id = mainTask.Id,
+            Title = branch.OverrideTitle ?? mainTask.Title,
+            Description = branch.OverrideDescription ?? mainTask.Description,
+            Status = branch.OverrideStatus ?? mainTask.Status,
+            Priority = branch.OverridePriority ?? mainTask.Priority
+        };
+
+        var mainTaskSnapshot = ToResponse(mainTask);
+        var changedFields = new List<string>();
+        if (!string.Equals(mainTaskSnapshot.Title, branchTaskSnapshot.Title, StringComparison.Ordinal)) changedFields.Add("title");
+        if (!string.Equals(mainTaskSnapshot.Description, branchTaskSnapshot.Description, StringComparison.Ordinal)) changedFields.Add("description");
+        if (!string.Equals(mainTaskSnapshot.Status, branchTaskSnapshot.Status, StringComparison.Ordinal)) changedFields.Add("status");
+        if (mainTaskSnapshot.Priority != branchTaskSnapshot.Priority) changedFields.Add("priority");
 
         var response = new BranchTimelineResponse
         {
             BranchId = branch.Id,
             BranchName = branch.BranchName,
             IsMainTimeline = branch.IsMainTimeline,
-            TaskSnapshot = mainTask is null ? null : ToResponse(mainTask)
+            MainTaskSnapshot = mainTaskSnapshot,
+            BranchTaskSnapshot = branchTaskSnapshot,
+            ChangedFields = changedFields
         };
 
         return Ok(response);
+    }
+
+    [HttpPut("branch/{branchId:guid}/override")]
+    public async Task<ActionResult<TaskBranchResponse>> UpdateBranchOverride(Guid branchId, [FromBody] UpdateTaskBranchOverrideRequest request)
+    {
+        var branch = await dbContext.TaskBranches.FirstOrDefaultAsync(b => b.Id == branchId);
+        if (branch is null)
+        {
+            return NotFound("Branch not found");
+        }
+
+        if (request.OverrideTitle is { Length: > 200 })
+        {
+            return BadRequest("overrideTitle must be 200 characters or fewer.");
+        }
+
+        if (request.OverrideDescription is { Length: > 2000 })
+        {
+            return BadRequest("overrideDescription must be 2000 characters or fewer.");
+        }
+
+        if (request.OverrideStatus is { Length: > 50 })
+        {
+            return BadRequest("overrideStatus must be 50 characters or fewer.");
+        }
+
+        branch.OverrideTitle = string.IsNullOrWhiteSpace(request.OverrideTitle) ? null : request.OverrideTitle.Trim();
+        branch.OverrideDescription = string.IsNullOrWhiteSpace(request.OverrideDescription) ? null : request.OverrideDescription.Trim();
+        branch.OverrideStatus = string.IsNullOrWhiteSpace(request.OverrideStatus) ? null : request.OverrideStatus.Trim();
+        branch.OverridePriority = request.OverridePriority;
+
+        await dbContext.SaveChangesAsync();
+
+        return Ok(new TaskBranchResponse
+        {
+            BranchId = branch.Id,
+            TaskId = branch.TaskId,
+            BranchName = branch.BranchName,
+            CreatedFromTime = branch.CreatedFromTime,
+            CreatedAt = branch.CreatedAt,
+            IsMainTimeline = branch.IsMainTimeline,
+            HasOverrides = branch.OverrideTitle != null || branch.OverrideDescription != null || branch.OverrideStatus != null || branch.OverridePriority != null
+        });
     }
 
     [HttpDelete("branch/{branchId:guid}")]

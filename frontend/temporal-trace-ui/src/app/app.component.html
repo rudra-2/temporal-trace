@@ -127,7 +127,50 @@
             <p>Created from: {{ selectedBranchCreatedAt() }}</p>
             <button class="delete-branch-btn" (click)="deleteSelectedBranch()">Delete Branch</button>
           </div>
-          <p class="status">Branch selected. Branch mutation actions are the next increment.</p>
+
+          @if (isBranchTimelineLoading) {
+            <p class="status">Loading branch timeline...</p>
+          }
+
+          @if (!isBranchTimelineLoading && selectedBranchTimeline?.mainTaskSnapshot; as mainSnapshot) {
+            @if (selectedBranchTimeline?.branchTaskSnapshot; as branchSnapshot) {
+              <div class="branch-compare">
+                <h4>Main vs Branch</h4>
+                <p [class.changed]="branchFieldChanged('title')">
+                  Title: {{ mainSnapshot.title }} -> {{ branchSnapshot.title }}
+                </p>
+                <p [class.changed]="branchFieldChanged('status')">
+                  Status: {{ mainSnapshot.status }} -> {{ branchSnapshot.status }}
+                </p>
+                <p [class.changed]="branchFieldChanged('priority')">
+                  Priority: {{ mainSnapshot.priority }} -> {{ branchSnapshot.priority }}
+                </p>
+                <p [class.changed]="branchFieldChanged('description')">
+                  Description: {{ branchSnapshot.description || 'No description' }}
+                </p>
+              </div>
+
+              <section class="branch-editor">
+                <h4>Edit Branch Overrides</h4>
+                <label>Title</label>
+                <input type="text" [(ngModel)]="branchDraftTitle" />
+
+                <label>Description</label>
+                <textarea rows="3" [(ngModel)]="branchDraftDescription"></textarea>
+
+                <label>Status</label>
+                <input type="text" [(ngModel)]="branchDraftStatus" />
+
+                <label>Priority</label>
+                <input type="number" min="1" max="5" [(ngModel)]="branchDraftPriority" />
+
+                <div class="dialog-actions">
+                  <button (click)="saveBranchOverrides()" [disabled]="isBranchLoading">Save Overrides</button>
+                  <button (click)="resetBranchOverrides()" [disabled]="isBranchLoading">Reset to Main</button>
+                </div>
+              </section>
+            }
+          }
         }
       </aside>
     </section>

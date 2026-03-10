@@ -286,6 +286,53 @@ footer {
   color: #1f5057;
 }
 
+.branch-compare {
+  margin-top: 0.75rem;
+  border: 1px solid rgba(9, 98, 109, 0.15);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.branch-compare h4 {
+  margin: 0 0 0.5rem;
+}
+
+.branch-compare p {
+  margin: 0.35rem 0;
+  font-size: 0.88rem;
+}
+
+.branch-editor {
+  margin-top: 0.75rem;
+  border: 1px solid rgba(9, 98, 109, 0.15);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: rgba(255, 255, 255, 0.8);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.branch-editor h4 {
+  margin: 0 0 0.4rem;
+}
+
+.branch-editor label {
+  font-size: 0.82rem;
+  color: #1f5057;
+  font-weight: 600;
+}
+
+.branch-editor input,
+.branch-editor textarea {
+  width: 100%;
+  border: 1px solid rgba(9, 98, 109, 0.25);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  background: #fff;
+}
+
 .delete-branch-btn {
   padding: 0.4rem 0.8rem;
   border-radius: 6px;

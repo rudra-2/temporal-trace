@@ -45,6 +45,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.IsMainTimeline).IsRequired();
 
+            entity.Property(e => e.OverrideTitle)
+                .HasMaxLength(200);
+
+            entity.Property(e => e.OverrideDescription)
+                .HasMaxLength(2000);
+
+            entity.Property(e => e.OverrideStatus)
+                .HasMaxLength(50);
+
             entity.HasIndex(e => e.TaskId);
 
             entity.ToTable("TaskBranches", tableBuilder =>

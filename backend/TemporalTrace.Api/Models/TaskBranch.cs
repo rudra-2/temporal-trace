@@ -8,4 +8,8 @@ public class TaskBranch
     public DateTime CreatedFromTime { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsMainTimeline { get; set; } = false;
+    public string? OverrideTitle { get; set; }
+    public string? OverrideDescription { get; set; }
+    public string? OverrideStatus { get; set; }
+    public int? OverridePriority { get; set; }
 }
