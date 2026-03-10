@@ -37,6 +37,10 @@
       <p class="status">No tasks existed at that moment.</p>
     }
 
+    @if (mode === 'history' && pendingLiveEvents > 0) {
+      <p class="status">{{ pendingLiveEvents }} live update(s) arrived while browsing history. Move slider to now to sync live state.</p>
+    }
+
     <section class="grid">
       @for (task of tasks; track task.id) {
         <article class="task-card">
