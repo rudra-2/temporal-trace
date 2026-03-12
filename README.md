@@ -1,6 +1,44 @@
 # Temporal-Trace
 Temporal task tracking platform with SQL Server Temporal Tables, EF Core 8, SignalR live sync, and Angular time-travel UI.
 
+## About
+
+**Temporal-Trace** is a full-stack project management tool that lets you travel back in time through your task history. Unlike conventional audit-log approaches, it uses **SQL Server system-versioned temporal tables** so that every change to a task is captured automatically at the database engine level — no application-layer triggers or manual history tables required.
+
+### What problem does it solve?
+
+Standard task trackers only show the *current* state of work. Temporal-Trace gives you a complete, queryable history of every task so you can answer questions like:
+
+- "What did task #42 look like three days ago?"
+- "Which tasks existed at the beginning of last sprint?"
+- "How did this task's status change over time?"
+
+### Key Features
+
+| Feature | Description |
+|---|---|
+| **Time-travel queries** | Query any task's exact state at any past timestamp via `GET /api/task/{id}/at?targetTime=…` |
+| **Historical snapshot list** | Retrieve the full task list as it existed at a given moment via `GET /api/task/at?targetTime=…` |
+| **Side-by-side diff** | Compare historical vs. current task fields with `GET /api/task/{id}/compare?targetTime=…` |
+| **Timeline branching** | Fork a task from a historical point to explore "what-if" projections without altering the main timeline |
+| **Live sync** | SignalR (`TemporalHub`) broadcasts every create, update, and delete so connected clients update in real time |
+| **Time-travel slider UI** | Angular 17 slider ranging from *24 hours ago* to *Now*; uses RxJS `switchMap` to prevent stale-request races |
+| **Live vs. Time-Travel mode** | UI clearly indicates whether you are viewing live data or a historical snapshot |
+
+### Why temporal tables instead of an audit log?
+
+> Temporal-Trace uses native SQL Server system-versioned temporal tables, so history is maintained by the database engine itself. This provides stronger integrity, cleaner time-based querying, and better performance than manual trigger or app-layer audit logging.
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Angular 17, RxJS, SignalR JS client |
+| Backend | .NET 8 Web API, EF Core 8 |
+| Database | SQL Server 2022 (system-versioned temporal tables) |
+| Real-time | ASP.NET Core SignalR |
+| Container | Docker Compose |
+
 ## Implementation Docs
 
 - Phased commit plan: `docs/PHASED_COMMIT_PLAN.md`
