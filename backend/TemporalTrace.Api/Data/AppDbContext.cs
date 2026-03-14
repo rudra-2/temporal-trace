@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<ProjectTask> ProjectTasks => Set<ProjectTask>();
     public DbSet<TaskBranch> TaskBranches => Set<TaskBranch>();
+    public DbSet<TaskWorkUpdate> TaskWorkUpdates => Set<TaskWorkUpdate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,10 +26,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .IsRequired()
                 .HasMaxLength(50);
 
+            entity.Property(e => e.UpdatedAt)
+                .IsRequired();
+
             entity.ToTable("ProjectTasks", tableBuilder =>
             {
                 tableBuilder.IsTemporal();
             });
+        });
+
+        modelBuilder.Entity<TaskWorkUpdate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.TaskId).IsRequired();
+
+            entity.Property(e => e.Note)
+                .IsRequired()
+                .HasMaxLength(1000);
+
+            entity.Property(e => e.StatusAfter)
+                .HasMaxLength(50);
+
+            entity.Property(e => e.CreatedAt).IsRequired();
+
+            entity.HasIndex(e => e.TaskId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.ToTable("TaskWorkUpdates");
         });
 
         modelBuilder.Entity<TaskBranch>(entity =>

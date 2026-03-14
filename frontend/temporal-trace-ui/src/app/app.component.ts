@@ -6,6 +6,8 @@ import { catchError, debounceTime, distinctUntilChanged, finalize, switchMap, ta
 import { ProjectTask } from './models/project-task';
 import { DiffToken, TaskComparison } from './models/task-comparison';
 import { BranchTimeline, CreateBranchRequest, TaskBranch, UpdateBranchOverrideRequest } from './models/task-branch';
+import { CreateTaskWorkUpdateRequest, TaskWorkUpdate } from './models/task-work-update';
+import { BranchScoreResult, DailyStandup, DecisionReplay } from './models/task-intelligence';
 import { TaskApiService } from './services/task-api.service';
 import { TemporalHubService } from './services/temporal-hub.service';
 
@@ -21,24 +23,52 @@ export class AppComponent implements OnInit, OnDestroy {
   private readonly hubService = inject(TemporalHubService);
   private readonly destroy$ = new Subject<void>();
   private readonly sliderChanges$ = new Subject<number>();
+  private doneRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   readonly nowMs = Date.now();
   readonly minMs = this.nowMs - 24 * 60 * 60 * 1000;
   readonly maxMs = this.nowMs;
 
   selectedMs = this.maxMs;
+  nowTickMs = Date.now();
   tasks: ProjectTask[] = [];
   isLoading = false;
   errorMessage = '';
   mode: 'live' | 'history' = 'live';
   pendingLiveEvents = 0;
 
+  // Startup cockpit
+  searchTerm = '';
+  statusFilter = 'all';
+  hideDoneAfterMinutes = 5;
+
+  newTaskTitle = '';
+  newTaskDescription = '';
+  newTaskPriority = 3;
+  newTaskStatus = 'Open';
+  isCreateTaskLoading = false;
+
+  selectedTaskId: number | null = null;
+  selectedTaskUpdates: TaskWorkUpdate[] = [];
+  isTaskUpdatesLoading = false;
+  newUpdateNote = '';
+  newUpdateStatus: string | null = null;
+  newUpdateMinutes: number | null = null;
+  isUpdateSubmitLoading = false;
+  decisionReplay: DecisionReplay | null = null;
+  isReplayLoading = false;
+  dailyStandup: DailyStandup | null = null;
+  isStandupLoading = false;
+  standupDate = new Date().toISOString().slice(0, 10);
+
+  // Ghost diff state
   selectedComparison: TaskComparison | null = null;
   selectedDiffTaskId: number | null = null;
   isComparisonLoading = false;
   descriptionHistoricalTokens: DiffToken[] = [];
   descriptionCurrentTokens: DiffToken[] = [];
 
+  // Branching state
   branches: TaskBranch[] = [];
   branchTaskId: number | null = null;
   selectedBranchId: string | null = null;
@@ -51,10 +81,16 @@ export class AppComponent implements OnInit, OnDestroy {
   branchDraftDescription = '';
   branchDraftStatus = '';
   branchDraftPriority: number | null = null;
+  branchScores: BranchScoreResult[] = [];
+  isBranchScoring = false;
 
   ngOnInit(): void {
     this.loadCurrentTasks();
     this.startRealtimeSync();
+
+    this.doneRefreshTimer = setInterval(() => {
+      this.nowTickMs = Date.now();
+    }, 30000);
 
     this.sliderChanges$
       .pipe(
@@ -97,13 +133,222 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    if (this.doneRefreshTimer) {
+      clearInterval(this.doneRefreshTimer);
+    }
     this.hubService.stop().catch(() => undefined);
+  }
+
+  get visibleTasks(): ProjectTask[] {
+    const search = this.searchTerm.trim().toLowerCase();
+    return this.tasks
+      .filter((task) => {
+        if (this.statusFilter !== 'all' && task.status.toLowerCase() !== this.statusFilter.toLowerCase()) {
+          return false;
+        }
+
+        if (search.length > 0) {
+          const target = `${task.title} ${task.description} ${task.status}`.toLowerCase();
+          if (!target.includes(search)) {
+            return false;
+          }
+        }
+
+        if (this.mode === 'live' && this.shouldHideDone(task)) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => a.id - b.id);
+  }
+
+  get totalCount(): number {
+    return this.visibleTasks.length;
+  }
+
+  get inProgressCount(): number {
+    return this.visibleTasks.filter((t) => t.status.toLowerCase() === 'inprogress').length;
+  }
+
+  get blockedCount(): number {
+    return this.visibleTasks.filter((t) => t.status.toLowerCase() === 'blocked').length;
+  }
+
+  get doneCount(): number {
+    return this.visibleTasks.filter((t) => this.isDoneStatus(t.status)).length;
   }
 
   onSliderInput(event: Event): void {
     const value = Number((event.target as HTMLInputElement).value);
     this.selectedMs = value;
     this.sliderChanges$.next(value);
+  }
+
+  createTask(): void {
+    if (!this.newTaskTitle.trim()) {
+      return;
+    }
+
+    this.isCreateTaskLoading = true;
+    this.taskApi
+      .createTask({
+        title: this.newTaskTitle.trim(),
+        description: this.newTaskDescription.trim(),
+        status: this.newTaskStatus,
+        priority: this.newTaskPriority
+      })
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to create task right now.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((created) => {
+        this.isCreateTaskLoading = false;
+        if (!created) {
+          return;
+        }
+
+        this.newTaskTitle = '';
+        this.newTaskDescription = '';
+        this.newTaskPriority = 3;
+        this.newTaskStatus = 'Open';
+
+        if (this.mode === 'live') {
+          this.tasks = [...this.tasks, created].sort((a, b) => a.id - b.id);
+        }
+      });
+  }
+
+  quickSetStatus(task: ProjectTask, status: string): void {
+    this.taskApi
+      .updateTask(task.id, {
+        title: task.title,
+        description: task.description,
+        status,
+        priority: task.priority
+      })
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to update task status.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((updated) => {
+        if (!updated) {
+          return;
+        }
+
+        this.tasks = this.tasks.map((t) => (t.id === updated.id ? updated : t));
+        if (this.selectedTaskId === updated.id) {
+          this.loadTaskUpdates(updated.id);
+        }
+      });
+  }
+
+  selectTask(task: ProjectTask): void {
+    this.selectedTaskId = task.id;
+    this.decisionReplay = null;
+    this.loadTaskUpdates(task.id);
+  }
+
+  addWorkUpdate(): void {
+    if (!this.selectedTaskId || !this.newUpdateNote.trim()) {
+      return;
+    }
+
+    const request: CreateTaskWorkUpdateRequest = {
+      note: this.newUpdateNote.trim(),
+      statusAfter: this.newUpdateStatus,
+      minutesSpent: this.newUpdateMinutes
+    };
+
+    this.isUpdateSubmitLoading = true;
+    this.taskApi
+      .addTaskUpdate(this.selectedTaskId, request)
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to add work update.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((result) => {
+        this.isUpdateSubmitLoading = false;
+        if (!result) {
+          return;
+        }
+
+        this.newUpdateNote = '';
+        this.newUpdateMinutes = null;
+        this.newUpdateStatus = null;
+        this.loadTaskUpdates(this.selectedTaskId!);
+        if (this.mode === 'live') {
+          this.loadCurrentTasks();
+        }
+      });
+  }
+
+  loadDecisionReplay(): void {
+    if (!this.selectedTaskId) {
+      return;
+    }
+
+    this.isReplayLoading = true;
+    this.taskApi
+      .getDecisionReplay(this.selectedTaskId)
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to build decision replay right now.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((replay) => {
+        this.isReplayLoading = false;
+        this.decisionReplay = replay;
+      });
+  }
+
+  generateDailyStandup(): void {
+    this.isStandupLoading = true;
+    this.taskApi
+      .getDailyStandup(this.standupDate)
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to generate standup summary.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((standup) => {
+        this.isStandupLoading = false;
+        this.dailyStandup = standup;
+      });
+  }
+
+  scoreBranches(): void {
+    if (!this.selectedDiffTaskId) {
+      return;
+    }
+
+    this.isBranchScoring = true;
+    this.taskApi
+      .getBranchScores(this.selectedDiffTaskId, new Date(this.selectedMs).toISOString())
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to score branches at this timestamp.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((scores) => {
+        this.isBranchScoring = false;
+        this.branchScores = scores?.branches ?? [];
+      });
   }
 
   onBranchSelectionChange(event: Event): void {
@@ -269,6 +514,10 @@ export class AppComponent implements OnInit, OnDestroy {
     return new Date(ms).toLocaleString();
   }
 
+  asIsoLabel(isoDate: string): string {
+    return new Date(isoDate).toLocaleString();
+  }
+
   isChanged(field: string): boolean {
     return this.selectedComparison?.changedFields.includes(field) ?? false;
   }
@@ -298,6 +547,27 @@ export class AppComponent implements OnInit, OnDestroy {
     return this.selectedBranchTimeline?.changedFields.includes(field) ?? false;
   }
 
+  progressForTask(task: ProjectTask): number {
+    const status = task.status.toLowerCase();
+    if (status === 'open' || status === 'todo') {
+      return 15;
+    }
+    if (status === 'inprogress') {
+      return 55;
+    }
+    if (status === 'blocked') {
+      return 35;
+    }
+    if (this.isDoneStatus(task.status)) {
+      return 100;
+    }
+    return 45;
+  }
+
+  statusClass(task: ProjectTask): string {
+    return `status-${task.status.toLowerCase()}`;
+  }
+
   private loadCurrentTasks(): void {
     this.isLoading = true;
     this.taskApi
@@ -312,6 +582,23 @@ export class AppComponent implements OnInit, OnDestroy {
       .subscribe((tasks) => {
         this.tasks = tasks;
         this.isLoading = false;
+      });
+  }
+
+  private loadTaskUpdates(taskId: number): void {
+    this.isTaskUpdatesLoading = true;
+    this.taskApi
+      .getTaskUpdates(taskId)
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to load task updates.';
+          return of([] as TaskWorkUpdate[]);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((updates) => {
+        this.selectedTaskUpdates = updates;
+        this.isTaskUpdatesLoading = false;
       });
   }
 
@@ -413,6 +700,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.branchTaskId = null;
     this.selectedBranchId = null;
     this.selectedBranchTimeline = null;
+    this.branchScores = [];
     this.showCreateBranchDialog = false;
   }
 
@@ -433,5 +721,33 @@ export class AppComponent implements OnInit, OnDestroy {
       .split(/\s+/)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
+  }
+
+  private shouldHideDone(task: ProjectTask): boolean {
+    if (!this.isDoneStatus(task.status)) {
+      return false;
+    }
+
+    const referenceTime = task.completedAt ?? task.updatedAt;
+    if (!referenceTime) {
+      return false;
+    }
+
+    const completedMs = new Date(referenceTime).getTime();
+    if (Number.isNaN(completedMs)) {
+      return false;
+    }
+
+    const ageMinutes = (this.nowTickMs - completedMs) / 60000;
+    if (ageMinutes < 0) {
+      return false;
+    }
+
+    return ageMinutes >= this.hideDoneAfterMinutes;
+  }
+
+  private isDoneStatus(status: string): boolean {
+    const normalized = status.toLowerCase();
+    return normalized === 'done' || normalized === 'completed' || normalized === 'closed';
   }
 }
