@@ -2,9 +2,64 @@
   <section class="panel">
     <header class="header">
       <p class="eyebrow">Temporal-Trace</p>
-      <h1>Task Time Travel</h1>
-      <p class="subtitle">Slide across the last 24 hours to inspect historical task states in SQL temporal history.</p>
+      <h1>Startup Execution Cockpit</h1>
+      <p class="subtitle">Live execution tracking, temporal time travel, and what-if branching in one surface.</p>
     </header>
+
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <h3>Total Visible</h3>
+        <p>{{ totalCount }}</p>
+      </article>
+      <article class="kpi-card">
+        <h3>In Progress</h3>
+        <p>{{ inProgressCount }}</p>
+      </article>
+      <article class="kpi-card">
+        <h3>Blocked</h3>
+        <p>{{ blockedCount }}</p>
+      </article>
+      <article class="kpi-card">
+        <h3>Done</h3>
+        <p>{{ doneCount }}</p>
+      </article>
+    </section>
+
+    <section class="create-task-card">
+      <h3>Add New Task</h3>
+      <div class="task-form-grid">
+        <input type="text" [(ngModel)]="newTaskTitle" placeholder="Task title" />
+        <input type="text" [(ngModel)]="newTaskDescription" placeholder="Short description" />
+        <select [(ngModel)]="newTaskStatus">
+          <option value="Open">Open</option>
+          <option value="InProgress">InProgress</option>
+          <option value="Blocked">Blocked</option>
+          <option value="Done">Done</option>
+        </select>
+        <input type="number" min="1" max="5" [(ngModel)]="newTaskPriority" placeholder="Priority 1-5" />
+      </div>
+      <div class="dialog-actions">
+        <button (click)="createTask()" [disabled]="!newTaskTitle.trim() || isCreateTaskLoading">Create Task</button>
+      </div>
+    </section>
+
+    <section class="controls-card">
+      <div class="filter-row">
+        <input type="text" [(ngModel)]="searchTerm" placeholder="Search title, description, status" />
+        <select [(ngModel)]="statusFilter">
+          <option value="all">All Statuses</option>
+          <option value="open">Open</option>
+          <option value="inprogress">InProgress</option>
+          <option value="blocked">Blocked</option>
+          <option value="done">Done</option>
+          <option value="completed">Completed</option>
+        </select>
+        <label>
+          Hide done after (min)
+          <input type="number" min="1" max="240" [(ngModel)]="hideDoneAfterMinutes" />
+        </label>
+      </div>
+    </section>
 
     <section class="slider-card">
       <div class="slider-meta">
@@ -43,7 +98,7 @@
     @if (showCreateBranchDialog && mode === 'history') {
       <section class="create-branch-dialog">
         <label for="branch-name">Branch Name:</label>
-        <input id="branch-name" type="text" [(ngModel)]="newBranchName" placeholder="e.g., If we prioritized bugs" />
+        <input id="branch-name" type="text" [(ngModel)]="newBranchName" placeholder="e.g., If we prioritized growth" />
         <div class="dialog-actions">
           <button (click)="createBranch()" [disabled]="!newBranchName.trim() || isBranchLoading">Create</button>
           <button (click)="showCreateBranchDialog = false">Cancel</button>
@@ -59,8 +114,8 @@
       <p class="error">{{ errorMessage }}</p>
     }
 
-    @if (!isLoading && tasks.length === 0) {
-      <p class="status">No tasks existed at that moment.</p>
+    @if (!isLoading && visibleTasks.length === 0) {
+      <p class="status">No tasks match current filters/time.</p>
     }
 
     @if (mode === 'history' && pendingLiveEvents > 0) {
@@ -69,33 +124,96 @@
 
     <section class="workspace">
       <section class="grid">
-        @for (task of tasks; track task.id) {
-          <article class="task-card" (mouseenter)="onTaskHover(task)">
+        @for (task of visibleTasks; track task.id) {
+          <article class="task-card" (mouseenter)="onTaskHover(task)" (click)="selectTask(task)" [class.selected]="selectedTaskId === task.id">
             <div class="task-top">
               <h2>{{ task.title }}</h2>
               <span class="priority">P{{ task.priority }}</span>
             </div>
             <p class="description">{{ task.description || 'No description' }}</p>
+
+            <div class="progress-line">
+              <div class="progress-fill" [style.width.%]="progressForTask(task)"></div>
+            </div>
+
             <footer>
-              <span class="status-pill">{{ task.status }}</span>
+              <span class="status-pill" [ngClass]="statusClass(task)">{{ task.status }}</span>
               <small>#{{ task.id }}</small>
             </footer>
+
+            @if (mode === 'live') {
+              <div class="quick-actions">
+                <button (click)="quickSetStatus(task, 'Open'); $event.stopPropagation()">Open</button>
+                <button (click)="quickSetStatus(task, 'InProgress'); $event.stopPropagation()">In Progress</button>
+                <button (click)="quickSetStatus(task, 'Done'); $event.stopPropagation()">Done</button>
+              </div>
+              <small class="updated-at">Updated: {{ asIsoLabel(task.updatedAt) }}</small>
+            }
           </article>
         }
       </section>
 
       <aside class="ghost-panel">
-        @if (!selectedBranchId) {
-          <h3>Ghost of Changes Past</h3>
-          @if (mode !== 'history') {
-            <p class="status">Switch to History mode and hover a task to view a diagnostic diff.</p>
+        @if (mode === 'live') {
+          <h3>Execution Feed</h3>
+          @if (!selectedTaskId) {
+            <p class="status">Select a task card to see work logs and push daily updates.</p>
           }
 
-          @if (mode === 'history' && isComparisonLoading) {
+          @if (selectedTaskId) {
+            <section class="work-log-form">
+              <h4>Log Work Update</h4>
+              <textarea rows="3" [(ngModel)]="newUpdateNote" placeholder="What was done? What is in progress? Any blocker?"></textarea>
+              <div class="work-log-fields">
+                <select [(ngModel)]="newUpdateStatus">
+                  <option [ngValue]="null">Keep current status</option>
+                  <option value="Open">Open</option>
+                  <option value="InProgress">InProgress</option>
+                  <option value="Blocked">Blocked</option>
+                  <option value="Done">Done</option>
+                </select>
+                <input type="number" min="1" max="480" [(ngModel)]="newUpdateMinutes" placeholder="Minutes spent" />
+              </div>
+              <div class="dialog-actions">
+                <button (click)="addWorkUpdate()" [disabled]="!newUpdateNote.trim() || isUpdateSubmitLoading">Add Update</button>
+              </div>
+            </section>
+
+            <section class="work-log-list">
+              <h4>Recent Updates</h4>
+              @if (isTaskUpdatesLoading) {
+                <p class="status">Loading updates...</p>
+              }
+              @if (!isTaskUpdatesLoading && selectedTaskUpdates.length === 0) {
+                <p class="status">No updates yet. Add the first progress note.</p>
+              }
+              @for (update of selectedTaskUpdates; track update.id) {
+                <article class="work-log-item">
+                  <p>{{ update.note }}</p>
+                  <small>
+                    {{ asIsoLabel(update.createdAt) }}
+                    @if (update.statusAfter) {
+                      · Status: {{ update.statusAfter }}
+                    }
+                    @if (update.minutesSpent) {
+                      · {{ update.minutesSpent }} min
+                    }
+                  </small>
+                </article>
+              }
+            </section>
+          }
+        }
+
+        @if (mode === 'history' && !selectedBranchId) {
+          <h3>Ghost of Changes Past</h3>
+          <p class="status">Hover a task to inspect historical vs current differences.</p>
+
+          @if (isComparisonLoading) {
             <p class="status">Loading comparison...</p>
           }
 
-          @if (mode === 'history' && selectedComparison) {
+          @if (selectedComparison) {
             <div class="diff-grid">
               <article>
                 <h4>Historical</h4>
@@ -121,7 +239,7 @@
           }
         }
 
-        @if (selectedBranchId) {
+        @if (mode === 'history' && selectedBranchId) {
           <h3>Branch: {{ selectedBranchName() }}</h3>
           <div class="branch-info">
             <p>Created from: {{ selectedBranchCreatedAt() }}</p>
@@ -136,18 +254,10 @@
             @if (selectedBranchTimeline?.branchTaskSnapshot; as branchSnapshot) {
               <div class="branch-compare">
                 <h4>Main vs Branch</h4>
-                <p [class.changed]="branchFieldChanged('title')">
-                  Title: {{ mainSnapshot.title }} -> {{ branchSnapshot.title }}
-                </p>
-                <p [class.changed]="branchFieldChanged('status')">
-                  Status: {{ mainSnapshot.status }} -> {{ branchSnapshot.status }}
-                </p>
-                <p [class.changed]="branchFieldChanged('priority')">
-                  Priority: {{ mainSnapshot.priority }} -> {{ branchSnapshot.priority }}
-                </p>
-                <p [class.changed]="branchFieldChanged('description')">
-                  Description: {{ branchSnapshot.description || 'No description' }}
-                </p>
+                <p [class.changed]="branchFieldChanged('title')">Title: {{ mainSnapshot.title }} -> {{ branchSnapshot.title }}</p>
+                <p [class.changed]="branchFieldChanged('status')">Status: {{ mainSnapshot.status }} -> {{ branchSnapshot.status }}</p>
+                <p [class.changed]="branchFieldChanged('priority')">Priority: {{ mainSnapshot.priority }} -> {{ branchSnapshot.priority }}</p>
+                <p [class.changed]="branchFieldChanged('description')">Description: {{ branchSnapshot.description || 'No description' }}</p>
               </div>
 
               <section class="branch-editor">

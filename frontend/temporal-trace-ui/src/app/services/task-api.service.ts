@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { ProjectTask } from '../models/project-task';
 import { TaskComparison } from '../models/task-comparison';
 import { TaskBranch, BranchTimeline, CreateBranchRequest, UpdateBranchOverrideRequest } from '../models/task-branch';
+import { CreateTaskWorkUpdateRequest, TaskWorkUpdate } from '../models/task-work-update';
 
 @Injectable({
   providedIn: 'root'
@@ -14,6 +15,14 @@ export class TaskApiService {
 
   getCurrentTasks(): Observable<ProjectTask[]> {
     return this.http.get<ProjectTask[]>(this.apiBase);
+  }
+
+  createTask(request: { title: string; description: string; status: string; priority: number }): Observable<ProjectTask> {
+    return this.http.post<ProjectTask>(this.apiBase, request);
+  }
+
+  updateTask(taskId: number, request: { title: string; description: string; status: string; priority: number }): Observable<ProjectTask> {
+    return this.http.put<ProjectTask>(`${this.apiBase}/${taskId}`, request);
   }
 
   getTasksAtTime(targetTimeIso: string): Observable<ProjectTask[]> {
@@ -46,5 +55,13 @@ export class TaskApiService {
 
   deleteBranch(branchId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiBase}/branch/${branchId}`);
+  }
+
+  getTaskUpdates(taskId: number): Observable<TaskWorkUpdate[]> {
+    return this.http.get<TaskWorkUpdate[]>(`${this.apiBase}/${taskId}/updates`);
+  }
+
+  addTaskUpdate(taskId: number, request: CreateTaskWorkUpdateRequest): Observable<TaskWorkUpdate> {
+    return this.http.post<TaskWorkUpdate>(`${this.apiBase}/${taskId}/updates`, request);
   }
 }

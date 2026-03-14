@@ -7,4 +7,6 @@ public class ProjectTask
     public string Description { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public int Priority { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt { get; set; }
 }

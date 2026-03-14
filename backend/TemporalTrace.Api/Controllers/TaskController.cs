@@ -170,7 +170,9 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
             Title = request.Title,
             Description = request.Description,
             Status = request.Status,
-            Priority = request.Priority
+            Priority = request.Priority,
+            UpdatedAt = DateTime.UtcNow,
+            CompletedAt = IsDoneStatus(request.Status) ? DateTime.UtcNow : null
         };
 
         dbContext.ProjectTasks.Add(task);
@@ -194,6 +196,8 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
         existing.Description = request.Description;
         existing.Status = request.Status;
         existing.Priority = request.Priority;
+        existing.UpdatedAt = DateTime.UtcNow;
+        existing.CompletedAt = IsDoneStatus(existing.Status) ? DateTime.UtcNow : null;
 
         await dbContext.SaveChangesAsync();
         var response = ToResponse(existing);
@@ -217,6 +221,65 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
         await hubContext.Clients.All.SendAsync("taskDeleted", deletedSnapshot);
 
         return NoContent();
+    }
+
+    [HttpGet("{id:int}/updates")]
+    public async Task<ActionResult<IEnumerable<TaskWorkUpdateResponse>>> GetTaskUpdates(int id)
+    {
+        var taskExists = await dbContext.ProjectTasks.AnyAsync(t => t.Id == id);
+        if (!taskExists)
+        {
+            return NotFound("Task not found");
+        }
+
+        var updates = await dbContext.TaskWorkUpdates
+            .AsNoTracking()
+            .Where(u => u.TaskId == id)
+            .OrderByDescending(u => u.CreatedAt)
+            .Select(u => ToTaskWorkUpdateResponse(u))
+            .ToListAsync();
+
+        return Ok(updates);
+    }
+
+    [HttpPost("{id:int}/updates")]
+    public async Task<ActionResult<TaskWorkUpdateResponse>> AddTaskUpdate(int id, [FromBody] CreateTaskWorkUpdateRequest request)
+    {
+        var task = await dbContext.ProjectTasks.FirstOrDefaultAsync(t => t.Id == id);
+        if (task is null)
+        {
+            return NotFound("Task not found");
+        }
+
+        var trimmedStatus = string.IsNullOrWhiteSpace(request.StatusAfter)
+            ? null
+            : request.StatusAfter.Trim();
+
+        var update = new TaskWorkUpdate
+        {
+            TaskId = id,
+            Note = request.Note.Trim(),
+            StatusAfter = trimmedStatus,
+            MinutesSpent = request.MinutesSpent,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        dbContext.TaskWorkUpdates.Add(update);
+
+        if (trimmedStatus is not null)
+        {
+            task.Status = trimmedStatus;
+            task.CompletedAt = IsDoneStatus(trimmedStatus) ? DateTime.UtcNow : null;
+        }
+
+        task.UpdatedAt = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync();
+
+        var taskResponse = ToResponse(task);
+        await hubContext.Clients.All.SendAsync("taskUpdated", taskResponse);
+
+        return Ok(ToTaskWorkUpdateResponse(update));
     }
 
     [HttpPost("{id:int}/branch")]
@@ -448,7 +511,46 @@ public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hub
             Title = task.Title,
             Description = task.Description,
             Status = task.Status,
-            Priority = task.Priority
+            Priority = task.Priority,
+            UpdatedAt = EnsureUtc(task.UpdatedAt),
+            CompletedAt = EnsureUtc(task.CompletedAt)
         };
+    }
+
+    private static TaskWorkUpdateResponse ToTaskWorkUpdateResponse(TaskWorkUpdate update)
+    {
+        return new TaskWorkUpdateResponse
+        {
+            Id = update.Id,
+            TaskId = update.TaskId,
+            Note = update.Note,
+            StatusAfter = update.StatusAfter,
+            MinutesSpent = update.MinutesSpent,
+            CreatedAt = EnsureUtc(update.CreatedAt)
+        };
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+    {
+        return value.Kind == DateTimeKind.Utc
+            ? value
+            : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+    }
+
+    private static DateTime? EnsureUtc(DateTime? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return EnsureUtc(value.Value);
+    }
+
+    private static bool IsDoneStatus(string status)
+    {
+        return string.Equals(status, "done", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "closed", StringComparison.OrdinalIgnoreCase);
     }
 }

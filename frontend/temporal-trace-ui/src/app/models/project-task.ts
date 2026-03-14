@@ -4,4 +4,6 @@ export interface ProjectTask {
   description: string;
   status: string;
   priority: number;
+  updatedAt: string;
+  completedAt: string | null;
 }
