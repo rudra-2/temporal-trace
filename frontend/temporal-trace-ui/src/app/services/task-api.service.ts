@@ -5,6 +5,7 @@ import { ProjectTask } from '../models/project-task';
 import { TaskComparison } from '../models/task-comparison';
 import { TaskBranch, BranchTimeline, CreateBranchRequest, UpdateBranchOverrideRequest } from '../models/task-branch';
 import { CreateTaskWorkUpdateRequest, TaskWorkUpdate } from '../models/task-work-update';
+import { BranchScore, DailyStandup, DecisionReplay } from '../models/task-intelligence';
 
 @Injectable({
   providedIn: 'root'
@@ -63,5 +64,32 @@ export class TaskApiService {
 
   addTaskUpdate(taskId: number, request: CreateTaskWorkUpdateRequest): Observable<TaskWorkUpdate> {
     return this.http.post<TaskWorkUpdate>(`${this.apiBase}/${taskId}/updates`, request);
+  }
+
+  getDecisionReplay(taskId: number, targetTimeIso?: string): Observable<DecisionReplay> {
+    let params = new HttpParams();
+    if (targetTimeIso) {
+      params = params.set('targetTime', targetTimeIso);
+    }
+
+    return this.http.get<DecisionReplay>(`${this.apiBase}/${taskId}/replay`, { params });
+  }
+
+  getBranchScores(taskId: number, targetTimeIso?: string): Observable<BranchScore> {
+    let params = new HttpParams();
+    if (targetTimeIso) {
+      params = params.set('targetTime', targetTimeIso);
+    }
+
+    return this.http.get<BranchScore>(`${this.apiBase}/${taskId}/branches/score`, { params });
+  }
+
+  getDailyStandup(targetDateIso?: string): Observable<DailyStandup> {
+    let params = new HttpParams();
+    if (targetDateIso) {
+      params = params.set('targetDate', targetDateIso);
+    }
+
+    return this.http.get<DailyStandup>(`${this.apiBase}/standup/daily`, { params });
   }
 }

@@ -7,6 +7,7 @@ import { ProjectTask } from './models/project-task';
 import { DiffToken, TaskComparison } from './models/task-comparison';
 import { BranchTimeline, CreateBranchRequest, TaskBranch, UpdateBranchOverrideRequest } from './models/task-branch';
 import { CreateTaskWorkUpdateRequest, TaskWorkUpdate } from './models/task-work-update';
+import { BranchScoreResult, DailyStandup, DecisionReplay } from './models/task-intelligence';
 import { TaskApiService } from './services/task-api.service';
 import { TemporalHubService } from './services/temporal-hub.service';
 
@@ -54,6 +55,11 @@ export class AppComponent implements OnInit, OnDestroy {
   newUpdateStatus: string | null = null;
   newUpdateMinutes: number | null = null;
   isUpdateSubmitLoading = false;
+  decisionReplay: DecisionReplay | null = null;
+  isReplayLoading = false;
+  dailyStandup: DailyStandup | null = null;
+  isStandupLoading = false;
+  standupDate = new Date().toISOString().slice(0, 10);
 
   // Ghost diff state
   selectedComparison: TaskComparison | null = null;
@@ -75,6 +81,8 @@ export class AppComponent implements OnInit, OnDestroy {
   branchDraftDescription = '';
   branchDraftStatus = '';
   branchDraftPriority: number | null = null;
+  branchScores: BranchScoreResult[] = [];
+  isBranchScoring = false;
 
   ngOnInit(): void {
     this.loadCurrentTasks();
@@ -243,6 +251,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   selectTask(task: ProjectTask): void {
     this.selectedTaskId = task.id;
+    this.decisionReplay = null;
     this.loadTaskUpdates(task.id);
   }
 
@@ -280,6 +289,65 @@ export class AppComponent implements OnInit, OnDestroy {
         if (this.mode === 'live') {
           this.loadCurrentTasks();
         }
+      });
+  }
+
+  loadDecisionReplay(): void {
+    if (!this.selectedTaskId) {
+      return;
+    }
+
+    this.isReplayLoading = true;
+    this.taskApi
+      .getDecisionReplay(this.selectedTaskId)
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to build decision replay right now.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((replay) => {
+        this.isReplayLoading = false;
+        this.decisionReplay = replay;
+      });
+  }
+
+  generateDailyStandup(): void {
+    this.isStandupLoading = true;
+    this.taskApi
+      .getDailyStandup(this.standupDate)
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to generate standup summary.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((standup) => {
+        this.isStandupLoading = false;
+        this.dailyStandup = standup;
+      });
+  }
+
+  scoreBranches(): void {
+    if (!this.selectedDiffTaskId) {
+      return;
+    }
+
+    this.isBranchScoring = true;
+    this.taskApi
+      .getBranchScores(this.selectedDiffTaskId, new Date(this.selectedMs).toISOString())
+      .pipe(
+        catchError(() => {
+          this.errorMessage = 'Unable to score branches at this timestamp.';
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((scores) => {
+        this.isBranchScoring = false;
+        this.branchScores = scores?.branches ?? [];
       });
   }
 
@@ -632,6 +700,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.branchTaskId = null;
     this.selectedBranchId = null;
     this.selectedBranchTimeline = null;
+    this.branchScores = [];
     this.showCreateBranchDialog = false;
   }
 

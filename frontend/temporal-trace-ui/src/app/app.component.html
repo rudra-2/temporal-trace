@@ -161,6 +161,19 @@
           }
 
           @if (selectedTaskId) {
+              <section class="work-log-form">
+                <h4>Auto Daily Standup</h4>
+                <div class="work-log-fields">
+                  <input type="date" [(ngModel)]="standupDate" />
+                  <button (click)="generateDailyStandup()" [disabled]="isStandupLoading">Generate</button>
+                </div>
+                @if (dailyStandup) {
+                  <article class="standup-narrative">
+                    <p>{{ dailyStandup.narrative }}</p>
+                  </article>
+                }
+              </section>
+
             <section class="work-log-form">
               <h4>Log Work Update</h4>
               <textarea rows="3" [(ngModel)]="newUpdateNote" placeholder="What was done? What is in progress? Any blocker?"></textarea>
@@ -181,6 +194,25 @@
 
             <section class="work-log-list">
               <h4>Recent Updates</h4>
+              <div class="dialog-actions">
+                <button (click)="loadDecisionReplay()" [disabled]="isReplayLoading">Build Decision Replay</button>
+              </div>
+              @if (decisionReplay) {
+                <article class="replay-summary">
+                  <p>{{ decisionReplay.summary }}</p>
+                  <small>{{ decisionReplay.events.length }} events</small>
+                </article>
+                <div class="replay-list">
+                  @for (event of decisionReplay.events; track event.timestamp + event.title + $index) {
+                    <article class="replay-item">
+                      <p><strong>{{ event.eventType }}</strong> · {{ event.title }}</p>
+                      <p>{{ event.details }}</p>
+                      <small>{{ asIsoLabel(event.timestamp) }}</small>
+                    </article>
+                  }
+                </div>
+              }
+
               @if (isTaskUpdatesLoading) {
                 <p class="status">Loading updates...</p>
               }
@@ -237,6 +269,30 @@
               </article>
             </div>
           }
+
+          <section class="branch-score-lab">
+            <h4>Counterfactual Branch Scoring</h4>
+            <div class="dialog-actions">
+              <button (click)="scoreBranches()" [disabled]="isBranchScoring || !selectedDiffTaskId">Score Current Branches</button>
+            </div>
+            @if (branchScores.length === 0) {
+              <p class="status">Run scoring to rank branch options by lead-time, risk, and effort.</p>
+            }
+            @for (score of branchScores; track score.branchId) {
+              <article class="score-item" [class.recommended]="score.isRecommended">
+                <p>
+                  <strong>{{ score.branchName }}</strong>
+                  @if (score.isRecommended) {
+                    · Recommended
+                  }
+                </p>
+                <small>
+                  Overall {{ score.overallScore }} | Lead {{ score.leadTimeImpact }} | Risk {{ score.riskScore }} | Effort {{ score.effortCost }}
+                </small>
+                <p>{{ score.reasons.join(', ') }}</p>
+              </article>
+            }
+          </section>
         }
 
         @if (mode === 'history' && selectedBranchId) {

@@ -380,6 +380,69 @@ footer {
   margin-top: 0.5rem;
 }
 
+.work-log-fields button {
+  padding: 0.48rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #cdd7d8;
+  background: #fff;
+  color: #20474d;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.standup-narrative,
+.replay-summary,
+.score-item {
+  margin-top: 0.55rem;
+  border: 1px solid rgba(9, 98, 109, 0.15);
+  border-radius: 8px;
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.replay-list {
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 0.55rem;
+}
+
+.replay-item {
+  border-top: 1px dashed rgba(16, 84, 90, 0.25);
+  padding-top: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.replay-item p {
+  margin: 0.12rem 0;
+  font-size: 0.84rem;
+}
+
+.replay-item small {
+  color: #345960;
+}
+
+.branch-score-lab {
+  margin-top: 0.75rem;
+  border: 1px solid rgba(9, 98, 109, 0.15);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.branch-score-lab h4 {
+  margin: 0;
+}
+
+.score-item p {
+  margin: 0.2rem 0;
+}
+
+.score-item.recommended {
+  border-color: rgba(33, 132, 79, 0.45);
+  background: rgba(214, 245, 227, 0.65);
+}
+
 .work-log-item {
   border-top: 1px dashed rgba(16, 84, 90, 0.25);
   padding-top: 0.55rem;
