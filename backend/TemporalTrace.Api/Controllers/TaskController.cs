@@ -12,6 +12,35 @@ namespace TemporalTrace.Api.Controllers;
 [Route("api/[controller]")]
 public class TaskController(AppDbContext dbContext, IHubContext<TemporalHub> hubContext) : ControllerBase
 {
+    [HttpGet("timeline/window")]
+    public async Task<ActionResult<TimelineWindowResponse>> GetTimelineWindow()
+    {
+        var nowUtc = DateTime.UtcNow;
+        var yesterdayStartUtc = nowUtc.Date.AddDays(-1);
+        var yesterdayEndUtc = nowUtc.Date;
+
+        var firstYesterdayActivity = await dbContext.ProjectTasks
+            .TemporalAll()
+            .Select(t => EF.Property<DateTime>(t, "PeriodStart"))
+            .Where(ts => ts >= yesterdayStartUtc && ts < yesterdayEndUtc)
+            .OrderBy(ts => ts)
+            .Select(ts => (DateTime?)ts)
+            .FirstOrDefaultAsync();
+
+        var minTimeUtc = firstYesterdayActivity.HasValue
+            ? EnsureUtc(firstYesterdayActivity.Value)
+            : nowUtc.AddHours(-24);
+
+        return Ok(new TimelineWindowResponse
+        {
+            MinTime = minTimeUtc,
+            MaxTime = nowUtc,
+            YesterdayStartUtc = yesterdayStartUtc,
+            YesterdayEndUtc = yesterdayEndUtc,
+            UsedFallbackWindow = !firstYesterdayActivity.HasValue
+        });
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProjectTaskResponse>>> GetTasks()
     {

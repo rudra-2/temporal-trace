@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { ProjectTask } from '../models/project-task';
+import { ProjectTask, TimelineWindow } from '../models/project-task';
 import { TaskComparison } from '../models/task-comparison';
 import { TaskBranch, BranchTimeline, CreateBranchRequest, UpdateBranchOverrideRequest } from '../models/task-branch';
 import { CreateTaskWorkUpdateRequest, TaskWorkUpdate } from '../models/task-work-update';
@@ -16,6 +16,10 @@ export class TaskApiService {
 
   getCurrentTasks(): Observable<ProjectTask[]> {
     return this.http.get<ProjectTask[]>(this.apiBase);
+  }
+
+  getTimelineWindow(): Observable<TimelineWindow> {
+    return this.http.get<TimelineWindow>(`${this.apiBase}/timeline/window`);
   }
 
   createTask(request: { title: string; description: string; status: string; priority: number }): Observable<ProjectTask> {

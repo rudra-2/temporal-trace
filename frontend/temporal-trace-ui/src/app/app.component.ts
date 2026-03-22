@@ -25,9 +25,8 @@ export class AppComponent implements OnInit, OnDestroy {
   private readonly sliderChanges$ = new Subject<number>();
   private doneRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  readonly nowMs = Date.now();
-  readonly minMs = this.nowMs - 24 * 60 * 60 * 1000;
-  readonly maxMs = this.nowMs;
+  minMs = Date.now() - 24 * 60 * 60 * 1000;
+  maxMs = Date.now();
 
   selectedMs = this.maxMs;
   nowTickMs = Date.now();
@@ -85,11 +84,18 @@ export class AppComponent implements OnInit, OnDestroy {
   isBranchScoring = false;
 
   ngOnInit(): void {
+    this.initializeTimelineWindow();
     this.loadCurrentTasks();
     this.startRealtimeSync();
 
     this.doneRefreshTimer = setInterval(() => {
-      this.nowTickMs = Date.now();
+      const currentMs = Date.now();
+      this.nowTickMs = currentMs;
+      this.maxMs = currentMs;
+
+      if (this.mode === 'live') {
+        this.selectedMs = this.maxMs;
+      }
     }, 30000);
 
     this.sliderChanges$
@@ -582,6 +588,32 @@ export class AppComponent implements OnInit, OnDestroy {
       .subscribe((tasks) => {
         this.tasks = tasks;
         this.isLoading = false;
+      });
+  }
+
+  private initializeTimelineWindow(): void {
+    this.taskApi
+      .getTimelineWindow()
+      .pipe(
+        catchError(() => of(null)),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((window) => {
+        if (!window) {
+          return;
+        }
+
+        const minMs = new Date(window.minTime).getTime();
+        const maxMs = new Date(window.maxTime).getTime();
+        if (Number.isNaN(minMs) || Number.isNaN(maxMs) || minMs >= maxMs) {
+          return;
+        }
+
+        this.minMs = minMs;
+        this.maxMs = maxMs;
+        if (this.selectedMs < this.minMs || this.selectedMs > this.maxMs || this.mode === 'live') {
+          this.selectedMs = this.maxMs;
+        }
       });
   }
 
