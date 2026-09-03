@@ -8,8 +8,8 @@ Each phase includes scope, expected output, and a suggested commit message.
 Goal: Initialize backend and frontend projects with a clear folder structure.
 
 Deliverables:
-- `src/backend/TemporalTrace.Api` (.NET 8 Web API)
-- `src/frontend/temporal-trace-ui` (Angular 17 app)
+- `backend/TemporalTrace.Api` (.NET 8 Web API)
+- `frontend/temporal-trace-ui` (Angular 17 app)
 - Solution file and basic README refresh
 
 Suggested commit message:
